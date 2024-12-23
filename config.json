@@ -1,0 +1,7 @@
+{
+    "bot_token": "your bot token",
+    "cooldown_hours": 1,
+    "welcome_message": "大佬您好，有任何VPS方面问题，欢迎您提问",
+    "secure_token": "your secure token",
+    "forward_to_id": "your telegram main id"  
+}

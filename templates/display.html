@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Chat</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #chat-window {
+            border: 1px solid #ddd;
+            height: 400px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+            padding: 10px;
+        }
+        input, button {
+            padding: 5px;
+            margin: 5px;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 8px;
+            border-radius: 4px;
+            background: #f8f9fa;
+        }
+        .message.sent {
+            background: #e3f2fd;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            margin-top: 5px;
+            border-radius: 4px;
+        }
+        a {
+            text-decoration: none;
+            color: blue;
+            cursor: pointer;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .input-container {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        .input-container input {
+            flex: 1;
+        }
+        .selected-user {
+            background-color: #e3f2fd;
+        }
+        .timestamp {
+            color: gray;
+            font-size: 0.8em;
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Telegram Chat</h1>
+    <div id="chat-window">
+        {% for message in messages %}
+        <div class="message {% if message.sender_name == 'You' %}sent{% endif %}">
+            <strong>{{ message.sender_name }} (<a onclick="selectUserId('{{ message.sender_id }}')">ID: {{ message.sender_id }}</a>):</strong> 
+            {% if "[图片]" in message.text %}
+                {% set parts = message.text.split(' ') %}
+                {% if parts|length > 1 %}
+                    <img src="{{ parts[1] }}" alt="Image from user">
+                    {% if parts|length > 2 %}
+                        <small>{{ parts[2:] | join(' ') }}</small>
+                    {% endif %}
+                {% endif %}
+            {% else %}
+                {{ message.text }}
+            {% endif %}
+            <span class="timestamp">{{ message.timestamp | dateformat }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="input-container">
+        <input type="text" id="sender_id" placeholder="Selected User ID" readonly>
+        <input type="text" id="message_text" placeholder="Enter your message" onkeypress="handleKeyPress(event)">
+        <button onclick="sendMessage()" id="send_button">Send</button>
+    </div>
+
+    <script>
+        const socket = io();
+        const chatWindow = document.getElementById('chat-window');
+        const senderIdInput = document.getElementById('sender_id');
+        const messageInput = document.getElementById('message_text');
+        const sendButton = document.getElementById('send_button');
+
+        // 获取secure_token
+        const urlParams = new URLSearchParams(window.location.search);
+        const secureToken = urlParams.get('secure_token');
+
+        // 发送消息
+        function sendMessage() {
+            const senderId = senderIdInput.value;
+            const messageText = messageInput.value;
+            
+            if (!senderId) {
+                alert('Please select a user ID first.');
+                return;
+            }
+            
+            if (!messageText) {
+                alert('Please enter a message.');
+                return;
+            }
+
+            socket.emit('send_message', {
+                secure_token: secureToken,
+                sender_id: senderId,
+                text: messageText
+            });
+            
+            messageInput.value = '';
+            messageInput.focus();
+        }
+
+        // 处理回车键
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // 选择用户 ID
+        function selectUserId(userId) {
+            senderIdInput.value = userId;
+            messageInput.focus();
+            
+            // 移除之前的选中状态
+            document.querySelectorAll('.selected-user').forEach(el => {
+                el.classList.remove('selected-user');
+            });
+            
+            // 为当前选中的用户ID添加高亮
+            const userMessages = document.querySelectorAll(`a[onclick*="${userId}"]`);
+            userMessages.forEach(el => {
+                el.closest('.message').classList.add('selected-user');
+            });
+        }
+
+        // 接收新消息并追加到聊天窗口
+        socket.on('new_message', function(data) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${data.sender_name === 'You' ? 'sent' : ''}`;
+            
+            let messageContent = `<strong>${data.sender_name} (<a onclick="selectUserId('${data.sender_id}')">ID: ${data.sender_id}</a>):</strong> `;
+            
+            if (data.text.startsWith("[图片]")) {
+                const parts = data.text.split(' ');
+                if (parts.length > 1) {
+                    const imgSrc = parts[1];
+                    const imgCaption = parts.slice(2).join(' ');
+                    messageContent += `
+                        <img src="${imgSrc}" alt="Image from user">
+                        <small>${imgCaption}</small>`;
+                }
+            } else {
+                messageContent += data.text;
+            }
+            
+            messageContent += `<span class="timestamp">${data.timestamp}</span>`;
+            messageDiv.innerHTML = messageContent;
+            
+            chatWindow.appendChild(messageDiv);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        });
+
+        // 错误处理
+        socket.on('error', function(data) {
+            alert(data.error);
+        });
+
+        // 初始化时滚动到底部
+        window.onload = function() {
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        };
+    </script>
+</body>
+</html>
